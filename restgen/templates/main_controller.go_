@@ -1,0 +1,22 @@
+package controller
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/pakohan/go-api/model"
+	"github.com/pakohan/go-api/service"
+    {{range .Models -}}
+	"{{$.ProjectImportPath}}/controller/{{remove_underscores .TableName | plural}}"
+    {{end}}
+)
+
+func New(l *log.Logger, m *model.Model, s *service.Service) http.Handler {
+	sm := http.NewServeMux()
+
+    {{range .Models -}}
+	sm.Handle("/{{plural .TableName}}/", {{remove_underscores .TableName | plural}}.New(l, m, s))
+    {{end}}
+
+	return sm
+}

@@ -1,0 +1,24 @@
+package model
+
+import (
+	"log"
+
+	"github.com/pakohan/go/modelhelper"
+    {{range .Models -}}
+	"{{$.ProjectImportPath}}/model/{{remove_underscores .TableName}}"
+    {{end}}
+)
+
+type Model struct {
+    {{range .Models -}}
+	{{pascal .TableName}} *{{remove_underscores .TableName}}.Model
+    {{end}}
+}
+
+func New(l *log.Logger, db modelhelper.DB) *Model {
+	return &Model{
+        {{range .Models -}}
+    	{{pascal .TableName}}: {{remove_underscores .TableName}}.New(l, db),
+        {{end}}
+	}
+}

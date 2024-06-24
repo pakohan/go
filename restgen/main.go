@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"fmt"
 	"go/format"
 	"html/template"
@@ -29,9 +30,10 @@ var (
 )
 
 type Config struct {
-	DatabaseURL string
-	BaseDir     string
-	Models      []Model
+	DatabaseURL       string
+	BaseDir           string
+	ProjectImportPath string
+	Models            []Model
 }
 
 type Model struct {
@@ -41,8 +43,9 @@ type Model struct {
 
 func main() {
 	cfg := Config{
-		DatabaseURL: "postgresql://postgres:test@localhost/postgres?sslmode=disable",
-		BaseDir:     "/Users/mogli/Code/go-api",
+		DatabaseURL:       "postgresql://postgres:test@localhost/postgres?sslmode=disable",
+		BaseDir:           "/Users/mogli/Code/go-api",
+		ProjectImportPath: "github.com/pakohan/go-api",
 		Models: []Model{
 			{
 				Schema:    "main",
@@ -71,25 +74,36 @@ func main() {
 	mh := modelhelper.DB{DB: db}
 
 	for _, model := range cfg.Models {
-		err = generateFiles(mh, tmpl, cfg.BaseDir, model)
+		err = generateModelFiles(mh, tmpl, cfg.BaseDir, model)
 		if err != nil {
 			log.Fatalf("err generating model files: %s\n", err.Error())
 		}
 	}
+
+	err = generateGlobalFiles(tmpl, cfg)
+	if err != nil {
+		log.Fatalf("err generating model files: %s\n", err.Error())
+	}
 }
 
-func generateFiles(mh modelhelper.DB, tmpl *template.Template, baseDir string, model Model) error {
+type templateCommand struct {
+	filepath     string
+	templateName string
+	rewrite      bool
+}
+
+func generateModelFiles(mh modelhelper.DB, tmpl *template.Template, baseDir string, model Model) error {
 	modelPackage := removeUnderscores(model.TableName)
-	paths := map[string]string{
-		filepath.Join(baseDir, "controller", plural(modelPackage), "controller.go"): "controller.go_",
-		filepath.Join(baseDir, "model", modelPackage, "model.go"):                   "model.go_",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "columns.sql"):         "columns.sql",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "delete.sql"):          "delete.sql",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "get.sql"):             "get.sql",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "insert.sql"):          "insert.sql",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "list.sql"):            "list.sql",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "select.sql"):          "select.sql",
-		filepath.Join(baseDir, "model", modelPackage, "sql", "update.sql"):          "update.sql",
+	commands := []templateCommand{
+		{filepath.Join(baseDir, "controller", plural(modelPackage), "controller.go"), "controller.go_", true},
+		{filepath.Join(baseDir, "model", modelPackage, "model.go"), "model.go_", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "columns.sql"), "columns.sql", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "delete.sql"), "delete.sql", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "get.sql"), "get.sql", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "insert.sql"), "insert.sql", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "list.sql"), "list.sql", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "select.sql"), "select.sql", true},
+		{filepath.Join(baseDir, "model", modelPackage, "sql", "update.sql"), "update.sql", true},
 	}
 
 	mi, err := getModelInfo(mh, sqlrepo.New(log.Default(), sqlDir, "sql"), model.Schema, model.TableName)
@@ -103,31 +117,64 @@ func generateFiles(mh modelhelper.DB, tmpl *template.Template, baseDir string, m
 		return fmt.Errorf("first column must be primary key with name id")
 	}
 
-	for path, templateName := range paths {
-		err := os.MkdirAll(filepath.Dir(path), fs.ModePerm)
-		if err != nil {
-			return fmt.Errorf("err making directory in file '%s': %s", path, err.Error())
-		}
+	for _, tc := range commands {
+		executeTemplate(tc, tmpl, mi)
+	}
+	return nil
+}
 
-		buf := &bytes.Buffer{}
-		err = tmpl.ExecuteTemplate(buf, templateName, mi)
-		if err != nil {
-			return fmt.Errorf("err executing template in file '%s': %s", path, err.Error())
-		}
+func generateGlobalFiles(tmpl *template.Template, cfg Config) error {
+	commands := []templateCommand{
+		{filepath.Join(cfg.BaseDir, "controller", "controller.go"), "main_controller.go_", true},
+		{filepath.Join(cfg.BaseDir, "model", "model.go"), "main_model.go_", true},
+	}
 
-		data := buf.Bytes()
-		if filepath.Ext(path) == ".go" {
-			data, err = format.Source(data)
-			if err != nil {
-				return fmt.Errorf("err formatting source in file '%s': %s", path, err.Error())
-			}
-		}
-
-		err = os.WriteFile(path, data, 0644)
+	for _, tc := range commands {
+		err := executeTemplate(tc, tmpl, cfg)
 		if err != nil {
-			return fmt.Errorf("err writing file in file '%s': %s", path, err.Error())
+			return err
 		}
 	}
+	return nil
+}
+
+func executeTemplate(tc templateCommand, tmpl *template.Template, templateParam interface{}) error {
+	_, err := os.Stat(tc.filepath)
+	switch {
+	case err == nil:
+		if !tc.rewrite {
+			return nil
+		}
+	case errors.Is(err, os.ErrNotExist):
+		// no
+	default:
+		return fmt.Errorf("err checking if file exists '%s': %s", tc.filepath, err.Error())
+	}
+
+	err = os.MkdirAll(filepath.Dir(tc.filepath), fs.ModePerm)
+	if err != nil {
+		return fmt.Errorf("err making directory in file '%s': %s", tc.filepath, err.Error())
+	}
+
+	buf := &bytes.Buffer{}
+	err = tmpl.ExecuteTemplate(buf, tc.templateName, templateParam)
+	if err != nil {
+		return fmt.Errorf("err executing template in file '%s': %s", tc.filepath, err.Error())
+	}
+
+	data := buf.Bytes()
+	if filepath.Ext(tc.filepath) == ".go" {
+		data, err = format.Source(data)
+		if err != nil {
+			return fmt.Errorf("err formatting source in file '%s': %s", tc.filepath, err.Error())
+		}
+	}
+
+	err = os.WriteFile(tc.filepath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("err writing file in file '%s': %s", tc.filepath, err.Error())
+	}
+
 	return nil
 }
 
