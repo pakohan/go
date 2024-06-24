@@ -47,10 +47,9 @@ func main() {
 		BaseDir:           "/Users/mogli/Code/go-api",
 		ProjectImportPath: "github.com/pakohan/go-api",
 		Models: []Model{
-			{
-				Schema:    "main",
-				TableName: "example",
-			},
+			{"tradingdb", "client"},
+			{"tradingdb", "client_audit"},
+			{"tradingdb", "trade"},
 		},
 	}
 
@@ -76,13 +75,13 @@ func main() {
 	for _, model := range cfg.Models {
 		err = generateModelFiles(mh, tmpl, cfg.BaseDir, model)
 		if err != nil {
-			log.Fatalf("err generating model files: %s\n", err.Error())
+			log.Fatalf("err generating model files for model %s: %s\n", model.TableName, err.Error())
 		}
 	}
 
 	err = generateGlobalFiles(tmpl, cfg)
 	if err != nil {
-		log.Fatalf("err generating model files: %s\n", err.Error())
+		log.Fatalf("err generating global files: %s\n", err.Error())
 	}
 }
 
@@ -179,7 +178,7 @@ func executeTemplate(tc templateCommand, tmpl *template.Template, templateParam 
 }
 
 func removeUnderscores(s string) string {
-	return strings.ReplaceAll(s, "_", "-")
+	return strings.ReplaceAll(s, "_", "")
 }
 
 func plural(s string) string {
