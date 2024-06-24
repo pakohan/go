@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/pakohan/go-api/model"
-	"github.com/pakohan/go-api/service"
+	"{{.ProjectImportPath}}/model"
+	"{{.ProjectImportPath}}/service"
     {{range .Models -}}
 	"{{$.ProjectImportPath}}/controller/{{remove_underscores .TableName | plural}}"
     {{end}}

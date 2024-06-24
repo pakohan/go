@@ -1,15 +1,15 @@
 package main
 
 import (
-	"github.com/pakohan/go/modelhelper"
+	"github.com/jmoiron/sqlx"
 	"github.com/pakohan/go/sqlrepo"
 )
 
 type modelInfo struct {
-	// TableName is the lower case singular name of the table
-	Schema    string
-	TableName string
-	Columns   []column
+	ProjectImportPath string
+	Schema            string
+	TableName         string
+	Columns           []column
 }
 
 type column struct {
@@ -18,7 +18,7 @@ type column struct {
 	IsNullable bool   `db:"is_nullable"`
 }
 
-func getModelInfo(db modelhelper.DB, q *sqlrepo.SQLRepository, schema, table string) (*modelInfo, error) {
+func getModelInfo(db *sqlx.DB, q *sqlrepo.SQLRepository, projectImportPath, schema, table string) (*modelInfo, error) {
 	columns := []column{}
 	err := db.Select(&columns, q.Query("get_columns"), schema, table)
 	if err != nil {
@@ -26,8 +26,18 @@ func getModelInfo(db modelhelper.DB, q *sqlrepo.SQLRepository, schema, table str
 	}
 
 	return &modelInfo{
-		Schema:    schema,
-		TableName: table,
-		Columns:   columns,
+		ProjectImportPath: projectImportPath,
+		Schema:            schema,
+		TableName:         table,
+		Columns:           columns,
 	}, nil
+}
+
+func getTables(db *sqlx.DB, q *sqlrepo.SQLRepository, schema string) ([]Model, error) {
+	tables := []Model{}
+	err := db.Select(&tables, q.Query("get_tables"), schema)
+	if err != nil {
+		return nil, err
+	}
+	return tables, nil
 }

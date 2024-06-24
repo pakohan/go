@@ -1,0 +1,19 @@
+package example
+
+import (
+	"log"
+
+	"{{.ProjectImportPath}}/model"
+)
+
+type Service struct {
+	l *log.Logger
+	m *model.Model
+}
+
+func New(l *log.Logger, m *model.Model) *Service {
+	return &Service{
+		l: l,
+		m: m,
+	}
+}

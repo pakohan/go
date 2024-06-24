@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/pakohan/go-api/model"
-	"github.com/pakohan/go-api/model/{{remove_underscores .TableName}}"
-	"github.com/pakohan/go-api/service"
+	"{{.ProjectImportPath}}/model"
+	"{{.ProjectImportPath}}/model/{{remove_underscores .TableName}}"
+	"{{.ProjectImportPath}}/service"
 	"github.com/pakohan/go/httphelper"
 )
 

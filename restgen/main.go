@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/format"
@@ -16,7 +18,6 @@ import (
 	"github.com/golang-cz/textcase"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/pakohan/go/modelhelper"
 	"github.com/pakohan/go/sqlrepo"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -27,32 +28,131 @@ var (
 	templates embed.FS
 	//go:embed sql
 	sqlDir embed.FS
+	repo   = sqlrepo.New(log.Default(), sqlDir, "sql")
 )
 
+const configFile = "restgen.json"
+
 type Config struct {
-	DatabaseURL       string
-	BaseDir           string
-	ProjectImportPath string
-	Models            []Model
+	BaseDir           string `json:"base_dir"`
+	ProjectImportPath string `json:"project_import_path"`
+
+	DatabaseURL string  `json:"database_url"`
+	TableSchema string  `json:"table_schema"`
+	Models      []Model `json:"models"`
 }
 
 type Model struct {
-	Schema    string
-	TableName string
+	ProjectImportPath string `json:"-"`
+	TableName         string `json:"table_name" db:"table_name"`
 }
 
 func main() {
-	cfg := Config{
-		DatabaseURL:       "postgresql://postgres:test@localhost/postgres?sslmode=disable",
-		BaseDir:           "/Users/mogli/Code/go-api",
-		ProjectImportPath: "github.com/pakohan/go-api",
-		Models: []Model{
-			{"tradingdb", "client"},
-			{"tradingdb", "client_audit"},
-			{"tradingdb", "trade"},
-		},
+	path, err := getConfigPath()
+	if err != nil {
+		log.Fatal(err.Error())
 	}
 
+	cfg, err := readConfig(path)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	err = generateFiles(cfg)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	log.Printf("go mod init %s && go mod tidy", cfg.ProjectImportPath)
+}
+
+func getConfigPath() (string, error) {
+	fmt.Printf("checking for config file at '%s'\n", configFile)
+	exists, err := checkFileExists(configFile)
+	if err != nil {
+		return "", err
+	} else if exists {
+		return configFile, nil
+	}
+
+	scanner := bufio.NewScanner(os.Stdin)
+
+	fmt.Printf("Please enter folder for your project: ")
+	scanner.Scan()
+	baseDir, err := filepath.Abs(scanner.Text())
+	if err != nil {
+		return "", err
+	}
+
+	p := filepath.Join(baseDir, configFile)
+	fmt.Printf("checking for config file at '%s'\n", p)
+	exists, err = checkFileExists(p)
+	if err != nil {
+		return "", err
+	} else if exists {
+		return p, nil
+	}
+
+	cfg := &Config{
+		BaseDir: baseDir,
+	}
+
+	fmt.Print("Please enter postgres connection URL: ")
+	scanner.Scan()
+	cfg.DatabaseURL = scanner.Text()
+
+	db, err := sqlx.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+
+	fmt.Print("Please enter schema: ")
+	scanner.Scan()
+	cfg.TableSchema = strings.TrimSpace(scanner.Text())
+
+	cfg.Models, err = getTables(db, repo, cfg.TableSchema)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Print("Please enter base import path for project: ")
+	scanner.Scan()
+	cfg.ProjectImportPath = strings.TrimSpace(scanner.Text())
+
+	p = filepath.Join(baseDir, configFile)
+	log.Printf("Creating json config file '%s'\n", p)
+	err = os.MkdirAll(baseDir, fs.ModePerm)
+	if err != nil {
+		return "", err
+	}
+
+	f, err := os.Create(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	return p, json.NewEncoder(f).Encode(cfg)
+}
+
+func readConfig(path string) (*Config, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	cfg := &Config{}
+	err = json.NewDecoder(f).Decode(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func generateFiles(cfg *Config) error {
 	tmpl := template.New("")
 	tmpl = tmpl.Funcs(template.FuncMap{
 		"pascal":             textcase.PascalCase,
@@ -62,27 +162,23 @@ func main() {
 	})
 	tmpl, err := tmpl.ParseFS(templates, "templates/*")
 	if err != nil {
-		log.Fatalf("err parsing template: %s\n", err.Error())
+		return err
 	}
 
 	db, err := sqlx.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("err opening database connection: %s\n", err.Error())
+		return err
 	}
 	defer db.Close()
-	mh := modelhelper.DB{DB: db}
 
 	for _, model := range cfg.Models {
-		err = generateModelFiles(mh, tmpl, cfg.BaseDir, model)
+		err = generateModelFiles(db, tmpl, cfg, model)
 		if err != nil {
-			log.Fatalf("err generating model files for model %s: %s\n", model.TableName, err.Error())
+			return err
 		}
 	}
 
-	err = generateGlobalFiles(tmpl, cfg)
-	if err != nil {
-		log.Fatalf("err generating global files: %s\n", err.Error())
-	}
+	return generateGlobalFiles(tmpl, cfg)
 }
 
 type templateCommand struct {
@@ -91,21 +187,24 @@ type templateCommand struct {
 	rewrite      bool
 }
 
-func generateModelFiles(mh modelhelper.DB, tmpl *template.Template, baseDir string, model Model) error {
+func generateModelFiles(db *sqlx.DB, tmpl *template.Template, cfg *Config, model Model) error {
+	log.Printf("generating model for table %s.%s\n", cfg.TableSchema, model.TableName)
+
+	model.ProjectImportPath = cfg.ProjectImportPath
 	modelPackage := removeUnderscores(model.TableName)
 	commands := []templateCommand{
-		{filepath.Join(baseDir, "controller", plural(modelPackage), "controller.go"), "controller.go_", true},
-		{filepath.Join(baseDir, "model", modelPackage, "model.go"), "model.go_", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "columns.sql"), "columns.sql", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "delete.sql"), "delete.sql", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "get.sql"), "get.sql", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "insert.sql"), "insert.sql", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "list.sql"), "list.sql", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "select.sql"), "select.sql", true},
-		{filepath.Join(baseDir, "model", modelPackage, "sql", "update.sql"), "update.sql", true},
+		{filepath.Join(cfg.BaseDir, "controller", plural(modelPackage), "controller.go"), "controller.go_", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "model.go"), "model.go_", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "columns.sql"), "columns.sql", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "delete.sql"), "delete.sql", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "get.sql"), "get.sql", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "insert.sql"), "insert.sql", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "list.sql"), "list.sql", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "select.sql"), "select.sql", false},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "update.sql"), "update.sql", false},
 	}
 
-	mi, err := getModelInfo(mh, sqlrepo.New(log.Default(), sqlDir, "sql"), model.Schema, model.TableName)
+	mi, err := getModelInfo(db, repo, cfg.ProjectImportPath, cfg.TableSchema, model.TableName)
 	if err != nil {
 		return fmt.Errorf("err getting model info: %s", err.Error())
 	}
@@ -117,15 +216,24 @@ func generateModelFiles(mh modelhelper.DB, tmpl *template.Template, baseDir stri
 	}
 
 	for _, tc := range commands {
-		executeTemplate(tc, tmpl, mi)
+		err = executeTemplate(tc, tmpl, mi)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
-func generateGlobalFiles(tmpl *template.Template, cfg Config) error {
+func generateGlobalFiles(tmpl *template.Template, cfg *Config) error {
 	commands := []templateCommand{
-		{filepath.Join(cfg.BaseDir, "controller", "controller.go"), "main_controller.go_", true},
-		{filepath.Join(cfg.BaseDir, "model", "model.go"), "main_model.go_", true},
+		{filepath.Join(cfg.BaseDir, "cmd", "api", "main.go"), "main.go_", false},
+
+		{filepath.Join(cfg.BaseDir, "controller", "controller.go"), "main_controller.go_", false},
+		{filepath.Join(cfg.BaseDir, "model", "model.go"), "main_model.go_", false},
+
+		{filepath.Join(cfg.BaseDir, "service", "service.go"), "main_service.go_", false},
+		{filepath.Join(cfg.BaseDir, "service", "example", "service.go"), "example_service.go_", false},
 	}
 
 	for _, tc := range commands {
@@ -138,16 +246,11 @@ func generateGlobalFiles(tmpl *template.Template, cfg Config) error {
 }
 
 func executeTemplate(tc templateCommand, tmpl *template.Template, templateParam interface{}) error {
-	_, err := os.Stat(tc.filepath)
-	switch {
-	case err == nil:
-		if !tc.rewrite {
-			return nil
-		}
-	case errors.Is(err, os.ErrNotExist):
-		// no
-	default:
-		return fmt.Errorf("err checking if file exists '%s': %s", tc.filepath, err.Error())
+	exists, err := checkFileExists(tc.filepath)
+	if err != nil {
+		return err
+	} else if exists && !tc.rewrite {
+		return nil
 	}
 
 	err = os.MkdirAll(filepath.Dir(tc.filepath), fs.ModePerm)
@@ -162,19 +265,33 @@ func executeTemplate(tc templateCommand, tmpl *template.Template, templateParam 
 	}
 
 	data := buf.Bytes()
+	data2 := data
 	if filepath.Ext(tc.filepath) == ".go" {
-		data, err = format.Source(data)
+		data2, err = format.Source(data)
 		if err != nil {
+			fmt.Println(string(data))
 			return fmt.Errorf("err formatting source in file '%s': %s", tc.filepath, err.Error())
 		}
 	}
 
-	err = os.WriteFile(tc.filepath, data, 0644)
+	log.Printf("creating file '%s'\n", tc.filepath)
+	err = os.WriteFile(tc.filepath, data2, 0644)
 	if err != nil {
 		return fmt.Errorf("err writing file in file '%s': %s", tc.filepath, err.Error())
 	}
 
 	return nil
+}
+
+func checkFileExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else {
+		return false, fmt.Errorf("err checking if file exists '%s': %s", path, err.Error())
+	}
 }
 
 func removeUnderscores(s string) string {

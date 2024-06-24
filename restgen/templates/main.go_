@@ -1,0 +1,40 @@
+package main
+
+import (
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+	"{{.ProjectImportPath}}/controller"
+	"{{.ProjectImportPath}}/model"
+	"{{.ProjectImportPath}}/service"
+	"github.com/pakohan/go/httphelper"
+	"github.com/pakohan/go/modelhelper"
+)
+
+func main() {
+	l := log.Default()
+	l.SetFlags(log.Llongfile | log.LstdFlags)
+
+	httphelper.PrettyPrint = true // TODO: dev flag
+
+	db, err := sqlx.Open("postgres", "{{.DatabaseURL}}")
+	if err != nil {
+		log.Panic(err)
+	}
+	defer db.Close()
+
+	m := model.New(l, modelhelper.DB{DB: db})
+	s := service.New(l, m)
+	c := controller.New(l, m, s)
+
+	server := &http.Server{
+		Addr:           ":8080",
+		Handler:        c,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
+}

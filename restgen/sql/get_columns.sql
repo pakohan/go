@@ -5,7 +5,7 @@ SELECT column_name as name
 		WHEN 'text' THEN 'string'
 		WHEN 'numeric' THEN 'float64'
 		WHEN 'timestamp' THEN 'time.Time'
-		WHEN 'bool' THEN 'time.Time'
+		WHEN 'bool' THEN 'bool'
 	  END as data_type
 	, is_nullable = 'YES' as is_nullable
 FROM information_schema.columns
