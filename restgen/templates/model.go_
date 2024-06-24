@@ -1,0 +1,85 @@
+package {{remove_underscores .TableName}}
+
+import (
+	"context"
+	"database/sql"
+	"embed"
+	"log"
+
+	"github.com/pakohan/go/modelhelper"
+	"github.com/pakohan/go/sqlrepo"
+)
+
+//go:embed sql
+var sqlDir embed.FS
+
+type Model struct {
+	l  *log.Logger
+	db modelhelper.DB
+	q  *sqlrepo.SQLRepository
+}
+
+type {{pascal .TableName}} struct {
+	{{range .Columns -}}
+	{{pascal .Name}} {{if .IsNullable}}*{{end}}{{.DataType}} `json:"{{.Name}}" db:"{{.Name}}"`
+	{{end -}}
+}
+
+func New(l *log.Logger, db modelhelper.DB) *Model {
+	return &Model{
+		l:  l,
+		db: db,
+		q:  sqlrepo.New(l, sqlDir, "sql"),
+	}
+}
+
+func (m *Model) List(ctx context.Context) ([]{{pascal .TableName}}, error) {
+	res := []{{pascal .TableName}}{}
+	err := m.db.SelectContext(ctx, &res, m.q.Query("list"))
+	if err != nil {
+		m.l.Printf("[model][{{remove_underscores .TableName}}][List] err: %v", err)
+	}
+
+	return res, err
+}
+
+func (m *Model) Insert(ctx context.Context, data {{pascal .TableName}}) (*{{pascal .TableName}}, error) {
+	res := &{{pascal .TableName}}{}
+	err := m.db.NamedGetContext(ctx, res, m.q.Query("insert"), data)
+	if err != nil {
+		m.l.Printf("[model][{{remove_underscores .TableName}}][Create] err: %v", err)
+	}
+
+	return res, err
+}
+func (m *Model) Get(ctx context.Context, id int) (*{{pascal .TableName}}, error) {
+	res := &{{pascal .TableName}}{}
+	err := m.db.GetContext(ctx, res, m.q.Query("get"), id)
+	if err != nil {
+		m.l.Printf("[model][{{remove_underscores .TableName}}][Get] err: %v", err)
+	}
+
+	return res, err
+}
+
+func (m *Model) Update(ctx context.Context, data {{pascal .TableName}}) (*{{pascal .TableName}}, error) {
+	res := &{{pascal .TableName}}{}
+	err := m.db.NamedGetContext(ctx, res, m.q.Query("update"), data)
+	if err == sql.ErrNoRows {
+		res = nil
+		err = nil
+	} else if err != nil {
+		m.l.Printf("[model][{{remove_underscores .TableName}}][Update] err: %v", err)
+	}
+
+	return res, err
+}
+
+func (m *Model) Delete(ctx context.Context, id int) error {
+	_, err := m.db.ExecContext(ctx, m.q.Query("delete"), id)
+	if err != nil {
+		m.l.Printf("[model][{{remove_underscores .TableName}}][Deleete] err: %v", err)
+	}
+
+	return err
+}

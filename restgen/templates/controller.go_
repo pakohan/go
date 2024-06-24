@@ -1,0 +1,86 @@
+package {{remove_underscores .TableName | plural}}
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/pakohan/go-api/model"
+	"github.com/pakohan/go-api/model/{{remove_underscores .TableName}}"
+	"github.com/pakohan/go-api/service"
+	"github.com/pakohan/go/httphelper"
+)
+
+func New(l *log.Logger, m *model.Model, s *service.Service) http.Handler {
+	c := &controller{
+		l: l,
+		m: m,
+		s: s,
+	}
+
+	sm := http.NewServeMux()
+
+	sm.HandleFunc("GET /{{plural .TableName}}/", c.list)
+	sm.HandleFunc("POST /{{plural .TableName}}/", c.create)
+	sm.HandleFunc("GET /{{plural .TableName}}/{id}", c.get)
+	sm.HandleFunc("PUT /{{plural .TableName}}/{id}", c.update)
+	sm.HandleFunc("DELETE /{{plural .TableName}}/{id}", c.delete)
+
+	return sm
+}
+
+type controller struct {
+	l *log.Logger
+	m *model.Model
+	s *service.Service
+}
+
+func (c *controller) list(w http.ResponseWriter, r *http.Request) {
+	data, err := c.m.{{pascal .TableName}}.List(r.Context())
+	httphelper.ServeJSON(w, r, data, err)
+}
+
+func (c *controller) create(w http.ResponseWriter, r *http.Request) {
+	data := &{{remove_underscores .TableName}}.{{pascal .TableName}}{}
+	if !httphelper.ParseBody(w, r, &data) {
+		return
+	}
+
+	data, err := c.m.{{pascal .TableName}}.Insert(r.Context(), *data)
+	httphelper.ServeJSON(w, r, data, err)
+}
+
+func (c *controller) get(w http.ResponseWriter, r *http.Request) {
+	id, ok := httphelper.IntParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	data, err := c.m.{{pascal .TableName}}.Get(r.Context(), id)
+	httphelper.ServeJSON(w, r, data, err)
+}
+
+func (c *controller) update(w http.ResponseWriter, r *http.Request) {
+	data := &{{remove_underscores .TableName}}.{{pascal .TableName}}{}
+	if !httphelper.ParseBody(w, r, &data) {
+		return
+	}
+
+	id, ok := httphelper.IntParam(w, r, "id")
+	if !ok {
+		return
+	}
+	data.Id = id
+
+	data, err := c.m.{{pascal .TableName}}.Update(r.Context(), *data)
+	httphelper.ServeJSON(w, r, data, err)
+}
+
+func (c *controller) delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := httphelper.IntParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	err := c.m.{{pascal .TableName}}.Delete(r.Context(), id)
+	httphelper.ServeResponse(w, r, err)
+}
