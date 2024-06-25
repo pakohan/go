@@ -1,2 +1,2 @@
-{{`{{`}}template "select.sql"{{`}}`}}
+{{`{{template "select.sql"}}`}}
 WHERE id = $1

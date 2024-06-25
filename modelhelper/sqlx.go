@@ -23,6 +23,17 @@ func (db *DB) NamedGetContext(ctx context.Context, dest interface{}, query strin
 	})
 }
 
+func (db *DB) NamedSelectContext(ctx context.Context, dest interface{}, query string, arg interface{}) error {
+	return db.Transaction(ctx, nil, func(tx *sqlx.Tx) error {
+		stmt, err := tx.PrepareNamedContext(ctx, query)
+		if err != nil {
+			return err
+		}
+
+		return stmt.SelectContext(ctx, dest, arg)
+	})
+}
+
 func (db *DB) Transaction(ctx context.Context, opts *sql.TxOptions, f func(*sqlx.Tx) error) error {
 	tx, err := db.BeginTxx(ctx, opts)
 	if err != nil {

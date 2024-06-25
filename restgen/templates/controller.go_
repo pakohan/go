@@ -1,12 +1,12 @@
-package {{remove_underscores .TableName | plural}}
+package {{remove_underscores .Model.TableName | plural}}
 
 import (
 	"log"
 	"net/http"
 
-	"{{.ProjectImportPath}}/model"
-	"{{.ProjectImportPath}}/model/{{remove_underscores .TableName}}"
-	"{{.ProjectImportPath}}/service"
+	"{{.Model.ProjectImportPath}}/model"
+	"{{.Model.ProjectImportPath}}/model/{{remove_underscores .Model.TableName}}"
+	"{{.Model.ProjectImportPath}}/service"
 	"github.com/pakohan/go/httphelper"
 )
 
@@ -19,11 +19,11 @@ func New(l *log.Logger, m *model.Model, s *service.Service) http.Handler {
 
 	sm := http.NewServeMux()
 
-	sm.HandleFunc("GET /{{plural .TableName}}/", c.list)
-	sm.HandleFunc("POST /{{plural .TableName}}/", c.create)
-	sm.HandleFunc("GET /{{plural .TableName}}/{id}", c.get)
-	sm.HandleFunc("PUT /{{plural .TableName}}/{id}", c.update)
-	sm.HandleFunc("DELETE /{{plural .TableName}}/{id}", c.delete)
+	sm.HandleFunc("GET /{{plural .Model.TableName}}/", c.list)
+	sm.HandleFunc("POST /{{plural .Model.TableName}}/", c.create)
+	sm.HandleFunc("GET /{{plural .Model.TableName}}/{id}", c.get)
+	sm.HandleFunc("PUT /{{plural .Model.TableName}}/{id}", c.update)
+	sm.HandleFunc("DELETE /{{plural .Model.TableName}}/{id}", c.delete)
 
 	return sm
 }
@@ -35,17 +35,23 @@ type controller struct {
 }
 
 func (c *controller) list(w http.ResponseWriter, r *http.Request) {
-	data, err := c.m.{{pascal .TableName}}.List(r.Context())
-	httphelper.ServeJSON(w, r, data, err)
+	res, err := httphelper.ListFromQuery[{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}](r.URL.Query())
+	if err != nil {
+		httphelper.ServeResponse(w, r, err)
+		return
+	}
+
+	err = c.m.{{pascal .Model.TableName}}.List(r.Context(), res)
+	httphelper.ServeJSON(w, r, res, err)
 }
 
 func (c *controller) create(w http.ResponseWriter, r *http.Request) {
-	data := &{{remove_underscores .TableName}}.{{pascal .TableName}}{}
+	data := &{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}{}
 	if !httphelper.ParseBody(w, r, &data) {
 		return
 	}
 
-	data, err := c.m.{{pascal .TableName}}.Insert(r.Context(), *data)
+	data, err := c.m.{{pascal .Model.TableName}}.Insert(r.Context(), *data)
 	httphelper.ServeJSON(w, r, data, err)
 }
 
@@ -55,12 +61,12 @@ func (c *controller) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := c.m.{{pascal .TableName}}.Get(r.Context(), id)
+	data, err := c.m.{{pascal .Model.TableName}}.Get(r.Context(), id)
 	httphelper.ServeJSON(w, r, data, err)
 }
 
 func (c *controller) update(w http.ResponseWriter, r *http.Request) {
-	data := &{{remove_underscores .TableName}}.{{pascal .TableName}}{}
+	data := &{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}{}
 	if !httphelper.ParseBody(w, r, &data) {
 		return
 	}
@@ -71,7 +77,7 @@ func (c *controller) update(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Id = id
 
-	data, err := c.m.{{pascal .TableName}}.Update(r.Context(), *data)
+	data, err := c.m.{{pascal .Model.TableName}}.Update(r.Context(), *data)
 	httphelper.ServeJSON(w, r, data, err)
 }
 
@@ -81,6 +87,6 @@ func (c *controller) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := c.m.{{pascal .TableName}}.Delete(r.Context(), id)
+	err := c.m.{{pascal .Model.TableName}}.Delete(r.Context(), id)
 	httphelper.ServeResponse(w, r, err)
 }

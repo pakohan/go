@@ -1,4 +1,4 @@
-package {{remove_underscores .TableName}}
+package {{remove_underscores .Model.TableName}}
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/pakohan/go/httphelper"
 	"github.com/pakohan/go/modelhelper"
 	"github.com/pakohan/go/sqlrepo"
 )
@@ -20,7 +21,7 @@ type Model struct {
 	q  *sqlrepo.SQLRepository
 }
 
-type {{pascal .TableName}} struct {
+type {{pascal .Model.TableName}} struct {
 	{{range .Columns -}}
 	{{pascal .Name}} {{if .IsNullable}}*{{end}}{{.DataType}} `json:"{{.Name}}" db:"{{.Name}}"`
 	{{end -}}
@@ -34,43 +35,42 @@ func New(l *log.Logger, db modelhelper.DB) *Model {
 	}
 }
 
-func (m *Model) List(ctx context.Context) ([]{{pascal .TableName}}, error) {
-	res := []{{pascal .TableName}}{}
-	err := m.db.SelectContext(ctx, &res, m.q.Query("list"))
+func (m *Model) List(ctx context.Context, res *httphelper.List[{{pascal .Model.TableName}}]) error {
+	err := m.db.NamedSelectContext(ctx, &res.Elements, m.q.Query("list", res), res)
 	if err != nil {
-		m.l.Printf("[model][{{remove_underscores .TableName}}][List] err: %v", err)
+		m.l.Printf("[model][{{remove_underscores .Model.TableName}}][List] err: %v", err)
 	}
 
-	return res, err
+	return err
 }
 
-func (m *Model) Insert(ctx context.Context, data {{pascal .TableName}}) (*{{pascal .TableName}}, error) {
-	res := &{{pascal .TableName}}{}
+func (m *Model) Insert(ctx context.Context, data {{pascal .Model.TableName}}) (*{{pascal .Model.TableName}}, error) {
+	res := &{{pascal .Model.TableName}}{}
 	err := m.db.NamedGetContext(ctx, res, m.q.Query("insert"), data)
 	if err != nil {
-		m.l.Printf("[model][{{remove_underscores .TableName}}][Create] err: %v", err)
+		m.l.Printf("[model][{{remove_underscores .Model.TableName}}][Create] err: %v", err)
 	}
 
 	return res, err
 }
-func (m *Model) Get(ctx context.Context, id int) (*{{pascal .TableName}}, error) {
-	res := &{{pascal .TableName}}{}
+func (m *Model) Get(ctx context.Context, id int) (*{{pascal .Model.TableName}}, error) {
+	res := &{{pascal .Model.TableName}}{}
 	err := m.db.GetContext(ctx, res, m.q.Query("get"), id)
 	if err != nil {
-		m.l.Printf("[model][{{remove_underscores .TableName}}][Get] err: %v", err)
+		m.l.Printf("[model][{{remove_underscores .Model.TableName}}][Get] err: %v", err)
 	}
 
 	return res, err
 }
 
-func (m *Model) Update(ctx context.Context, data {{pascal .TableName}}) (*{{pascal .TableName}}, error) {
-	res := &{{pascal .TableName}}{}
+func (m *Model) Update(ctx context.Context, data {{pascal .Model.TableName}}) (*{{pascal .Model.TableName}}, error) {
+	res := &{{pascal .Model.TableName}}{}
 	err := m.db.NamedGetContext(ctx, res, m.q.Query("update"), data)
 	if err == sql.ErrNoRows {
 		res = nil
 		err = nil
 	} else if err != nil {
-		m.l.Printf("[model][{{remove_underscores .TableName}}][Update] err: %v", err)
+		m.l.Printf("[model][{{remove_underscores .Model.TableName}}][Update] err: %v", err)
 	}
 
 	return res, err
@@ -79,7 +79,7 @@ func (m *Model) Update(ctx context.Context, data {{pascal .TableName}}) (*{{pasc
 func (m *Model) Delete(ctx context.Context, id int) error {
 	_, err := m.db.ExecContext(ctx, m.q.Query("delete"), id)
 	if err != nil {
-		m.l.Printf("[model][{{remove_underscores .TableName}}][Deleete] err: %v", err)
+		m.l.Printf("[model][{{remove_underscores .Model.TableName}}][Deleete] err: %v", err)
 	}
 
 	return err

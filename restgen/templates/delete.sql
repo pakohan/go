@@ -1,2 +1,2 @@
-DELETE FROM "{{.Schema}}"."{{.TableName}}"
+DELETE FROM "{{.Schema}}"."{{.Model.TableName}}"
 WHERE id = $1

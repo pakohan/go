@@ -6,10 +6,9 @@ import (
 )
 
 type modelInfo struct {
-	ProjectImportPath string
-	Schema            string
-	TableName         string
-	Columns           []column
+	Model   Model
+	Schema  string
+	Columns []column
 }
 
 type column struct {
@@ -18,18 +17,17 @@ type column struct {
 	IsNullable bool   `db:"is_nullable"`
 }
 
-func getModelInfo(db *sqlx.DB, q *sqlrepo.SQLRepository, projectImportPath, schema, table string) (*modelInfo, error) {
+func getModelInfo(db *sqlx.DB, q *sqlrepo.SQLRepository, schema string, model Model) (*modelInfo, error) {
 	columns := []column{}
-	err := db.Select(&columns, q.Query("get_columns"), schema, table)
+	err := db.Select(&columns, q.Query("get_columns"), schema, model.TableName)
 	if err != nil {
 		return nil, err
 	}
 
 	return &modelInfo{
-		ProjectImportPath: projectImportPath,
-		Schema:            schema,
-		TableName:         table,
-		Columns:           columns,
+		Model:   model,
+		Schema:  schema,
+		Columns: columns,
 	}, nil
 }
 

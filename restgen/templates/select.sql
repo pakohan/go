@@ -1,2 +1,2 @@
-SELECT {{`{{`}}template "columns.sql"{{`}}`}}
-FROM "{{.Schema}}"."{{.TableName}}"
+SELECT {{`{{template "columns.sql"}}`}}
+FROM "{{.Schema}}"."{{.Model.TableName}}"
