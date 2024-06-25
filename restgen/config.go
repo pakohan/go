@@ -28,7 +28,6 @@ type Config struct {
 type Model struct {
 	ProjectImportPath string `json:"-"`
 	TableName         string `json:"table_name" db:"table_name"`
-	Pagination        bool   `json:"pagination"`
 }
 
 func getConfigPath() (string, error) {
