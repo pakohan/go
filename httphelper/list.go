@@ -7,14 +7,15 @@ import (
 
 var DefaultPageSize = 10
 
-type List[T interface{}] struct {
+type List[T, F any] struct {
 	Elements []T `json:"elements"`
+	Filter   F   `json:"filter"`
 	Page     int `json:"page" db:"page"`
 	PageSize int `json:"page_size" db:"page_size"`
 }
 
-func ListFromQuery[T interface{}](q url.Values) (*List[T], error) {
-	res := List[T]{
+func ListFromQuery[T, F any](q url.Values) (*List[T, F], error) {
+	res := List[T, F]{
 		Page:     1,
 		PageSize: DefaultPageSize,
 	}

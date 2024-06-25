@@ -35,11 +35,33 @@ type controller struct {
 }
 
 func (c *controller) list(w http.ResponseWriter, r *http.Request) {
-	res, err := httphelper.ListFromQuery[{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}](r.URL.Query())
+	res, err := httphelper.ListFromQuery[{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}, {{remove_underscores .Model.TableName}}.Filter](r.URL.Query())
 	if err != nil {
 		httphelper.ServeResponse(w, r, err)
 		return
 	}
+
+	ok := true // simplifies the template a lot
+	_ = ok
+	{{range .Columns}}
+	{{if .IsFilter}}
+	{{- if eq .DataType "string"}}
+	res.Filter.{{pascal .Name}} = r.URL.Query().Get("{{.Name}}")
+	{{else if eq .DataType "int"}}
+	res.Filter.{{pascal .Name}}, ok = httphelper.IntQueryParam(w, r, "{{.Name}}")
+	{{else if eq .DataType "float64"}}
+	res.Filter.{{pascal .Name}}, ok = httphelper.FloatQueryParam(w, r, "{{.Name}}")
+	{{else if eq .DataType "time.Time"}}
+	res.Filter.{{pascal .Name}}, ok = httphelper.TimeQueryParam(w, r, "{{.Name}}")
+	{{else if eq .DataType "bool"}}
+	res.Filter.{{pascal .Name}}, ok = httphelper.BoolQueryParam(w, r, "{{.Name}}")
+	{{end -}}
+	if !ok {
+		httphelper.ServeResponse(w, r, err)
+		return
+	}
+	{{end}}
+	{{end}}
 
 	err = c.m.{{pascal .Model.TableName}}.List(r.Context(), res)
 	httphelper.ServeJSON(w, r, res, err)

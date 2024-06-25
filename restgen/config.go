@@ -26,8 +26,9 @@ type Config struct {
 }
 
 type Model struct {
-	ProjectImportPath string `json:"-"`
-	TableName         string `json:"table_name" db:"table_name"`
+	ProjectImportPath string   `json:"-"`
+	TableName         string   `json:"table_name" db:"table_name"`
+	FilterColumns     []string `json:"filter_columns"`
 }
 
 func getConfigPath() (string, error) {

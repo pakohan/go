@@ -27,6 +27,16 @@ type {{pascal .Model.TableName}} struct {
 	{{end -}}
 }
 
+type Filter struct {
+	Page     int `json:"page" db:"page"`
+	PageSize int `json:"page_size" db:"page_size"`
+	{{range .Columns -}}
+	{{if .IsFilter}}
+	{{pascal .Name}} {{if eq .DataType "time.Time"}}*{{end}}{{.DataType}} `json:"{{.Name}}" db:"{{.Name}}"`
+	{{- end -}}
+	{{end -}}
+}
+
 func New(l *log.Logger, db modelhelper.DB) *Model {
 	return &Model{
 		l:  l,
@@ -35,8 +45,10 @@ func New(l *log.Logger, db modelhelper.DB) *Model {
 	}
 }
 
-func (m *Model) List(ctx context.Context, res *httphelper.List[{{pascal .Model.TableName}}]) error {
-	err := m.db.NamedSelectContext(ctx, &res.Elements, m.q.Query("list", res), res)
+func (m *Model) List(ctx context.Context, res *httphelper.List[{{pascal .Model.TableName}}, Filter]) error {
+	res.Filter.Page = res.Page
+	res.Filter.PageSize = res.PageSize
+	err := m.db.NamedSelectContext(ctx, &res.Elements, m.q.Query("list", res), res.Filter)
 	if err != nil {
 		m.l.Printf("[model][{{remove_underscores .Model.TableName}}][List] err: %v", err)
 	}

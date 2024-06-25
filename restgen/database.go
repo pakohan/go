@@ -15,13 +15,25 @@ type column struct {
 	Name       string `db:"name"`
 	DataType   string `db:"data_type"`
 	IsNullable bool   `db:"is_nullable"`
+	IsFilter   bool
 }
 
 func getModelInfo(db *sqlx.DB, q *sqlrepo.SQLRepository, schema string, model Model) (*modelInfo, error) {
+	m := map[string]struct{}{}
+	for _, column := range model.FilterColumns {
+		m[column] = struct{}{}
+	}
+
 	columns := []column{}
 	err := db.Select(&columns, q.Query("get_columns"), schema, model.TableName)
 	if err != nil {
 		return nil, err
+	}
+
+	for i, c := range columns {
+		if _, ok := m[c.Name]; ok {
+			columns[i].IsFilter = true
+		}
 	}
 
 	return &modelInfo{
