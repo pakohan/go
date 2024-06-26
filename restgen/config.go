@@ -32,14 +32,20 @@ type Model struct {
 }
 
 func getConfigPath() (string, error) {
-	if len(os.Args) > 1 {
-		fmt.Printf("checking for config file at '%s'\n", configFile)
-		exists, err := checkFileExists(configFile)
+	if len(os.Args) == 1 {
+		fmt.Printf("checking for config file in current directory\n")
+		path, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+
+		exists, err := checkFileExists(filepath.Join(path, configFile))
 		if err != nil {
 			return "", err
 		} else if exists {
 			return configFile, nil
 		}
+		fmt.Printf("no restgen.json file found in current directory\n")
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
