@@ -2,7 +2,7 @@
 WHERE TRUE
 {{range $index, $element := .Columns}}
 {{- if .IsFilter -}}
-{{`{{if`}} .Filter.{{pascal .Name}}{{`}}`}}
+{{`{{if`}} .{{pascal .Name}}{{`}}`}}
 AND "{{.Name}}" = :{{.Name}}
 {{`{{end}}`}}
 {{end -}}

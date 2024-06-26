@@ -46,7 +46,7 @@ func New(l *log.Logger, db modelhelper.DB) *Model {
 
 func (m *Model) List(ctx context.Context, f Filter) ([]{{pascal .Model.TableName}}, error) {
 	res := []{{pascal .Model.TableName}}{}
-	err := m.db.NamedSelectContext(ctx, &res, m.q.Query("list", res), f)
+	err := m.db.NamedSelectContext(ctx, &res, m.q.Query("list", f), f)
 	if err != nil {
 		return nil, err
 	}

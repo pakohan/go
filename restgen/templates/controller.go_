@@ -21,11 +21,11 @@ func New(l *log.Logger, m *model.Model, s *service.Service) http.Handler {
 
 	sm := http.NewServeMux()
 
-	sm.HandleFunc("GET /{{plural .Model.TableName}}/", httphelper.Handle(c.list))
-	sm.HandleFunc("POST /{{plural .Model.TableName}}/", httphelper.Handle(c.create))
-	sm.HandleFunc("GET /{{plural .Model.TableName}}/{id}", httphelper.Handle(c.get))
-	sm.HandleFunc("PUT /{{plural .Model.TableName}}/{id}", httphelper.Handle(c.update))
-	sm.HandleFunc("DELETE /{{plural .Model.TableName}}/{id}", httphelper.Handle(c.delete))
+	sm.HandleFunc("GET /", httphelper.Handle(c.list))
+	sm.HandleFunc("POST /", httphelper.Handle(c.create))
+	sm.HandleFunc("GET /{id}", httphelper.Handle(c.get))
+	sm.HandleFunc("PUT /{id}", httphelper.Handle(c.update))
+	sm.HandleFunc("DELETE /{id}", httphelper.Handle(c.delete))
 
 	return sm
 }

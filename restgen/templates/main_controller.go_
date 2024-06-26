@@ -15,7 +15,7 @@ func New(l *log.Logger, m *model.Model, s *service.Service) http.Handler {
 	sm := http.NewServeMux()
 
     {{range .Models -}}
-	sm.Handle("/{{plural .TableName}}/", {{remove_underscores .TableName | plural}}.New(l, m, s))
+	sm.Handle("/{{plural .TableName}}/", http.StripPrefix("/{{plural .TableName}}", {{remove_underscores .TableName | plural}}.New(l, m, s)))
     {{end}}
 
 	return sm
