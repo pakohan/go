@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -17,7 +15,6 @@ import (
 const configFile = "restgen.json"
 
 type Config struct {
-	BaseDir           string `json:"base_dir"`
 	ProjectImportPath string `json:"project_import_path"`
 
 	DatabaseURL string  `json:"database_url"`
@@ -31,58 +28,24 @@ type Model struct {
 	FilterColumns     []string `json:"filter_columns"`
 }
 
-func getConfigPath() (string, error) {
-	if len(os.Args) == 1 {
-		fmt.Printf("checking for config file in current directory\n")
-		path, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-
-		exists, err := checkFileExists(filepath.Join(path, configFile))
-		if err != nil {
-			return "", err
-		} else if exists {
-			return configFile, nil
-		}
-		fmt.Printf("no restgen.json file found in current directory\n")
+func makeConfig() error {
+	exists, err := checkFileExists(configFile)
+	if err != nil {
+		return err
+	} else if exists {
+		return nil
 	}
+
+	cfg := &Config{}
 
 	scanner := bufio.NewScanner(os.Stdin)
-
-	var baseDir string
-	if len(os.Args) > 1 {
-		baseDir = os.Args[1]
-	} else {
-		fmt.Printf("Please enter folder for your project: ")
-		scanner.Scan()
-		var err error
-		baseDir, err = filepath.Abs(scanner.Text())
-		if err != nil {
-			return "", err
-		}
-	}
-
-	p := filepath.Join(baseDir, configFile)
-	fmt.Printf("checking for config file at '%s'\n", p)
-	exists, err := checkFileExists(p)
-	if err != nil {
-		return "", err
-	} else if exists {
-		return p, nil
-	}
-
-	cfg := &Config{
-		BaseDir: baseDir,
-	}
-
 	fmt.Print("Please enter postgres connection URL: ")
 	scanner.Scan()
 	cfg.DatabaseURL = scanner.Text()
 
 	db, err := sqlx.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer db.Close()
 
@@ -92,31 +55,25 @@ func getConfigPath() (string, error) {
 
 	cfg.Models, err = getTables(db, repo, cfg.TableSchema)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	fmt.Print("Please enter base import path for project: ")
 	scanner.Scan()
 	cfg.ProjectImportPath = strings.TrimSpace(scanner.Text())
 
-	p = filepath.Join(baseDir, configFile)
-	log.Printf("Creating json config file '%s'\n", p)
-	err = os.MkdirAll(baseDir, fs.ModePerm)
+	log.Printf("Creating json config file '%s'\n", configFile)
+	f, err := os.Create(configFile)
 	if err != nil {
-		return "", err
-	}
-
-	f, err := os.Create(p)
-	if err != nil {
-		return "", err
+		return err
 	}
 	defer f.Close()
 
-	return p, json.NewEncoder(f).Encode(cfg)
+	return json.NewEncoder(f).Encode(cfg)
 }
 
-func readConfig(path string) (*Config, error) {
-	f, err := os.Open(path)
+func readConfig() (*Config, error) {
+	f, err := os.Open(configFile)
 	if err != nil {
 		return nil, err
 	}

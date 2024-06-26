@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	_ "github.com/lib/pq"
 	"github.com/pakohan/go/sqlrepo"
@@ -20,22 +19,17 @@ var (
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	path, err := getConfigPath()
+	err := makeConfig()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	cfg, err := readConfig(path)
+	cfg, err := readConfig()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	err = os.Chdir(cfg.BaseDir)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	exists, err := checkFileExists(filepath.Join(cfg.BaseDir, "go.mod"))
+	exists, err := checkFileExists("go.mod")
 	if err != nil {
 		log.Fatal(err.Error())
 	}

@@ -64,16 +64,16 @@ func generateModelFiles(db *sqlx.DB, tmpl *template.Template, cfg *Config, model
 
 	modelPackage := removeUnderscores(model.TableName)
 	commands := []templateCommand{
-		{filepath.Join(cfg.BaseDir, "controller", plural(modelPackage), "controller.go"), "controller.go_", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "model.go"), "model.go_", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "columns.sql"), "columns.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "delete.sql"), "delete.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "get.sql"), "get.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "insert.sql"), "insert.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "list.sql"), "list.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "select.sql"), "select.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "update.sql"), "update.sql", true},
-		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "count.sql"), "count.sql", true},
+		{filepath.Join("controller", plural(modelPackage), "controller.go"), "controller.go_", true},
+		{filepath.Join("model", modelPackage, "model.go"), "model.go_", true},
+		{filepath.Join("model", modelPackage, "sql", "columns.sql"), "columns.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "delete.sql"), "delete.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "get.sql"), "get.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "insert.sql"), "insert.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "list.sql"), "list.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "select.sql"), "select.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "update.sql"), "update.sql", true},
+		{filepath.Join("model", modelPackage, "sql", "count.sql"), "count.sql", true},
 	}
 
 	model.ProjectImportPath = cfg.ProjectImportPath
@@ -100,13 +100,13 @@ func generateModelFiles(db *sqlx.DB, tmpl *template.Template, cfg *Config, model
 
 func generateGlobalFiles(tmpl *template.Template, cfg *Config) error {
 	commands := []templateCommand{
-		{filepath.Join(cfg.BaseDir, "cmd", "api", "main.go"), "main.go_", false},
+		{filepath.Join("cmd", "api", "main.go"), "main.go_", false},
 
-		{filepath.Join(cfg.BaseDir, "controller", "controller.go"), "main_controller.go_", true},
-		{filepath.Join(cfg.BaseDir, "model", "model.go"), "main_model.go_", true},
+		{filepath.Join("controller", "controller.go"), "main_controller.go_", true},
+		{filepath.Join("model", "model.go"), "main_model.go_", true},
 
-		{filepath.Join(cfg.BaseDir, "service", "service.go"), "main_service.go_", true},
-		{filepath.Join(cfg.BaseDir, "service", "example", "service.go"), "example_service.go_", true},
+		{filepath.Join("service", "service.go"), "main_service.go_", true},
+		{filepath.Join("service", "example", "service.go"), "example_service.go_", true},
 	}
 
 	for _, tc := range commands {
