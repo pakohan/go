@@ -20,6 +20,8 @@ import (
 var (
 	//go:embed templates
 	templates embed.FS
+
+	formatSource = true
 )
 
 type templateCommand struct {
@@ -71,6 +73,7 @@ func generateModelFiles(db *sqlx.DB, tmpl *template.Template, cfg *Config, model
 		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "list.sql"), "list.sql", true},
 		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "select.sql"), "select.sql", true},
 		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "update.sql"), "update.sql", true},
+		{filepath.Join(cfg.BaseDir, "model", modelPackage, "sql", "count.sql"), "count.sql", true},
 	}
 
 	model.ProjectImportPath = cfg.ProjectImportPath
@@ -136,7 +139,7 @@ func executeTemplate(tc templateCommand, tmpl *template.Template, templateParam 
 
 	data := buf.Bytes()
 	data2 := data
-	if filepath.Ext(tc.filepath) == ".go" {
+	if filepath.Ext(tc.filepath) == ".go" && formatSource {
 		data2, err = format.Source(data)
 		if err != nil {
 			fmt.Println(string(data))

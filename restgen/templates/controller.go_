@@ -1,8 +1,10 @@
 package {{remove_underscores .Model.TableName | plural}}
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"{{.Model.ProjectImportPath}}/model"
 	"{{.Model.ProjectImportPath}}/model/{{remove_underscores .Model.TableName}}"
@@ -19,11 +21,11 @@ func New(l *log.Logger, m *model.Model, s *service.Service) http.Handler {
 
 	sm := http.NewServeMux()
 
-	sm.HandleFunc("GET /{{plural .Model.TableName}}/", c.list)
-	sm.HandleFunc("POST /{{plural .Model.TableName}}/", c.create)
-	sm.HandleFunc("GET /{{plural .Model.TableName}}/{id}", c.get)
-	sm.HandleFunc("PUT /{{plural .Model.TableName}}/{id}", c.update)
-	sm.HandleFunc("DELETE /{{plural .Model.TableName}}/{id}", c.delete)
+	sm.HandleFunc("GET /{{plural .Model.TableName}}/", httphelper.Handle(c.list))
+	sm.HandleFunc("POST /{{plural .Model.TableName}}/", httphelper.Handle(c.create))
+	sm.HandleFunc("GET /{{plural .Model.TableName}}/{id}", httphelper.Handle(c.get))
+	sm.HandleFunc("PUT /{{plural .Model.TableName}}/{id}", httphelper.Handle(c.update))
+	sm.HandleFunc("DELETE /{{plural .Model.TableName}}/{id}", httphelper.Handle(c.delete))
 
 	return sm
 }
@@ -34,81 +36,77 @@ type controller struct {
 	s *service.Service
 }
 
-func (c *controller) list(w http.ResponseWriter, r *http.Request) {
+func (c *controller) list(r *http.Request) (interface{}, error) {
 	res, err := httphelper.ListFromQuery[{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}, {{remove_underscores .Model.TableName}}.Filter](r.URL.Query())
 	if err != nil {
-		httphelper.ServeResponse(w, r, err)
-		return
+		return nil, err
 	}
+	res.Filter.PageSize = res.PageSize
+	res.Filter.Page = res.Page
 
-	ok := true // simplifies the template a lot
-	_ = ok
 	{{range .Columns}}
-	{{if .IsFilter}}
+	{{- if .IsFilter}}
 	{{- if eq .DataType "string"}}
 	res.Filter.{{pascal .Name}} = r.URL.Query().Get("{{.Name}}")
-	{{else if eq .DataType "int"}}
-	res.Filter.{{pascal .Name}}, ok = httphelper.IntQueryParam(w, r, "{{.Name}}")
-	{{else if eq .DataType "float64"}}
-	res.Filter.{{pascal .Name}}, ok = httphelper.FloatQueryParam(w, r, "{{.Name}}")
-	{{else if eq .DataType "time.Time"}}
-	res.Filter.{{pascal .Name}}, ok = httphelper.TimeQueryParam(w, r, "{{.Name}}")
-	{{else if eq .DataType "bool"}}
-	res.Filter.{{pascal .Name}}, ok = httphelper.BoolQueryParam(w, r, "{{.Name}}")
-	{{end -}}
-	if !ok {
-		httphelper.ServeResponse(w, r, err)
-		return
+	{{- else if eq .DataType "int"}}
+	res.Filter.{{pascal .Name}}, err = httphelper.IntQueryParam(r, "{{.Name}}")
+	{{- else if eq .DataType "float64"}}
+	res.Filter.{{pascal .Name}}, err = httphelper.FloatQueryParam(r, "{{.Name}}")
+	{{- else if eq .DataType "time.Time"}}
+	res.Filter.{{pascal .Name}}, err = httphelper.TimeQueryParam(r, "{{.Name}}")
+	{{- else if eq .DataType "bool"}}
+	res.Filter.{{pascal .Name}}, err = httphelper.BoolQueryParam(r, "{{.Name}}")
+	{{- end}}
+	{{- if ne .DataType "string"}}
+	if err != nil {
+		return nil, err
 	}
+	{{- end}}
 	{{end}}
-	{{end}}
+	{{- end}}
 
-	err = c.m.{{pascal .Model.TableName}}.List(r.Context(), res)
-	httphelper.ServeJSON(w, r, res, err)
+	return c.m.{{pascal .Model.TableName}}.List(r.Context(), res.Filter)
 }
 
-func (c *controller) create(w http.ResponseWriter, r *http.Request) {
+func (c *controller) create(r *http.Request) (interface{}, error) {
 	data := &{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}{}
-	if !httphelper.ParseBody(w, r, &data) {
-		return
+	err := json.NewDecoder(r.Body).Decode(data)
+	if err != nil {
+		return nil, err
 	}
 
-	data, err := c.m.{{pascal .Model.TableName}}.Insert(r.Context(), *data)
-	httphelper.ServeJSON(w, r, data, err)
+	return c.m.{{pascal .Model.TableName}}.Insert(r.Context(), *data)
 }
 
-func (c *controller) get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httphelper.IntParam(w, r, "id")
-	if !ok {
-		return
+func (c *controller) get(r *http.Request) (interface{}, error) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		return nil, err
 	}
 
-	data, err := c.m.{{pascal .Model.TableName}}.Get(r.Context(), id)
-	httphelper.ServeJSON(w, r, data, err)
+	return c.m.{{pascal .Model.TableName}}.Get(r.Context(), id)
 }
 
-func (c *controller) update(w http.ResponseWriter, r *http.Request) {
+func (c *controller) update(r *http.Request) (interface{}, error) {
 	data := &{{remove_underscores .Model.TableName}}.{{pascal .Model.TableName}}{}
-	if !httphelper.ParseBody(w, r, &data) {
-		return
+	err := json.NewDecoder(r.Body).Decode(data)
+	if err != nil {
+		return nil, err
 	}
 
-	id, ok := httphelper.IntParam(w, r, "id")
-	if !ok {
-		return
+	data.Id, err = strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		return nil, err
 	}
-	data.Id = id
 
-	data, err := c.m.{{pascal .Model.TableName}}.Update(r.Context(), *data)
-	httphelper.ServeJSON(w, r, data, err)
+	return c.m.{{pascal .Model.TableName}}.Update(r.Context(), *data)
 }
 
-func (c *controller) delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httphelper.IntParam(w, r, "id")
-	if !ok {
-		return
+func (c *controller) delete(r *http.Request) (interface{}, error) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		return nil, err
 	}
 
-	err := c.m.{{pascal .Model.TableName}}.Delete(r.Context(), id)
-	httphelper.ServeResponse(w, r, err)
+	return "OK", c.m.{{pascal .Model.TableName}}.Delete(r.Context(), id)
 }
