@@ -65,7 +65,12 @@ func (c *controller) list(r *http.Request) (interface{}, error) {
 	{{end}}
 	{{- end}}
 
-	return c.m.{{pascal .Model.TableName}}.List(r.Context(), res.Filter)
+	res.Elements, err = c.m.{{pascal .Model.TableName}}.List(r.Context(), res.Filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func (c *controller) create(r *http.Request) (interface{}, error) {
